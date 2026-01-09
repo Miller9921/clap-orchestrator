@@ -1,0 +1,66 @@
+{
+  "module_name": "Payment Processing",
+  "created_at": "2026-01-09T06:11:35.347Z",
+  "status": "example",
+  "repositories": {
+    "domain": {
+      "repository": "Miller9921/flutter-domain",
+      "branch": "feature/payment-processing-domain",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null
+    },
+    "infrastructure": {
+      "repository": "Miller9921/flutter-infrastructure",
+      "branch": "feature/payment-processing-infrastructure",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null,
+      "depends_on": ["domain"]
+    },
+    "ui": {
+      "repository": "Miller9921/flutter-ui-components",
+      "branch": "feature/payment-processing-ui",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null,
+      "depends_on": ["domain", "infrastructure"]
+    },
+    "admin": {
+      "repository": "Miller9921/flutter-admin-app",
+      "branch": "feature/payment-processing-admin",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null,
+      "depends_on": ["domain", "infrastructure", "ui"]
+    },
+    "user": {
+      "repository": "Miller9921/flutter-frontuser-app",
+      "branch": "feature/payment-processing-user",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null,
+      "depends_on": ["domain", "infrastructure", "ui"]
+    }
+  },
+  "workflow_run": {
+    "workflow_id": null,
+    "run_id": null,
+    "run_url": null,
+    "triggered_at": null,
+    "completed_at": null
+  },
+  "merge_order": [
+    "domain",
+    "infrastructure",
+    "ui",
+    "admin",
+    "user"
+  ],
+  "notes": "Status values: pending, pr_created, in_review, approved, merged, failed"
+}

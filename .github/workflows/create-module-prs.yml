@@ -1,0 +1,299 @@
+name: Create Module PRs
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_name:
+        description: 'Module name (e.g., payment-processing)'
+        required: true
+        type: string
+      module_path:
+        description: 'Path to module spec (e.g., modules/payment-processing-module)'
+        required: true
+        type: string
+
+jobs:
+  # Job 1: Domain Layer (no dependencies)
+  create-domain-pr:
+    name: Create Domain PR
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+        
+      - name: Read module spec
+        id: read-spec
+        run: |
+          if [ -f "${{ inputs.module_path }}/module-spec.md" ]; then
+            echo "Module spec found"
+            echo "spec_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Module spec not found"
+            echo "spec_exists=false" >> $GITHUB_OUTPUT
+            exit 1
+          fi
+      
+      - name: Read copilot instructions
+        id: read-instructions
+        run: |
+          INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/01-domain.md)
+          echo "instructions<<EOF" >> $GITHUB_OUTPUT
+          echo "$INSTRUCTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create Domain PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Read the module spec
+          MODULE_SPEC=$(cat ${{ inputs.module_path }}/module-spec.md)
+          COPILOT_INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/01-domain.md)
+          
+          # Create PR body
+          PR_BODY="## Module: ${{ inputs.module_name }}
+          
+          ### Layer: Domain
+          
+          ### Module Specification
+          
+          \`\`\`markdown
+          ${MODULE_SPEC}
+          \`\`\`
+          
+          ### Copilot Instructions
+          
+          \`\`\`markdown
+          ${COPILOT_INSTRUCTIONS}
+          \`\`\`
+          
+          ---
+          
+          This PR was automatically created by the CLAP Orchestrator.
+          Please review the specification and implementation carefully."
+          
+          # Note: Actual PR creation would use gh CLI or API
+          echo "Would create PR in Miller9921/flutter-domain"
+          echo "Title: [Domain] Add ${{ inputs.module_name }} module"
+          echo "Branch: feature/${{ inputs.module_name }}-domain"
+          
+          # For actual implementation, use:
+          # gh pr create --repo Miller9921/flutter-domain \
+          #   --title "[Domain] Add ${{ inputs.module_name }} module" \
+          #   --body "$PR_BODY" \
+          #   --base main \
+          #   --head "feature/${{ inputs.module_name }}-domain"
+
+  # Job 2: Infrastructure Layer (depends on Domain)
+  create-infrastructure-pr:
+    name: Create Infrastructure PR
+    runs-on: ubuntu-latest
+    needs: [create-domain-pr]
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+      
+      - name: Read copilot instructions
+        id: read-instructions
+        run: |
+          INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/02-infrastructure.md)
+          echo "instructions<<EOF" >> $GITHUB_OUTPUT
+          echo "$INSTRUCTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create Infrastructure PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MODULE_SPEC=$(cat ${{ inputs.module_path }}/module-spec.md)
+          COPILOT_INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/02-infrastructure.md)
+          
+          PR_BODY="## Module: ${{ inputs.module_name }}
+          
+          ### Layer: Infrastructure
+          
+          **Dependencies:** Domain layer must be merged first
+          
+          ### Module Specification
+          
+          \`\`\`markdown
+          ${MODULE_SPEC}
+          \`\`\`
+          
+          ### Copilot Instructions
+          
+          \`\`\`markdown
+          ${COPILOT_INSTRUCTIONS}
+          \`\`\`
+          
+          ---
+          
+          This PR was automatically created by the CLAP Orchestrator."
+          
+          echo "Would create PR in Miller9921/flutter-infrastructure"
+          echo "Title: [Infrastructure] Add ${{ inputs.module_name }} module"
+          echo "Branch: feature/${{ inputs.module_name }}-infrastructure"
+
+  # Job 3: UI Layer (depends on Domain and Infrastructure)
+  create-ui-pr:
+    name: Create UI PR
+    runs-on: ubuntu-latest
+    needs: [create-domain-pr, create-infrastructure-pr]
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+      
+      - name: Read copilot instructions
+        id: read-instructions
+        run: |
+          INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/03-ui.md)
+          echo "instructions<<EOF" >> $GITHUB_OUTPUT
+          echo "$INSTRUCTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create UI PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MODULE_SPEC=$(cat ${{ inputs.module_path }}/module-spec.md)
+          COPILOT_INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/03-ui.md)
+          
+          PR_BODY="## Module: ${{ inputs.module_name }}
+          
+          ### Layer: UI Components
+          
+          **Dependencies:** Domain and Infrastructure layers must be merged first
+          
+          ### Module Specification
+          
+          \`\`\`markdown
+          ${MODULE_SPEC}
+          \`\`\`
+          
+          ### Copilot Instructions
+          
+          \`\`\`markdown
+          ${COPILOT_INSTRUCTIONS}
+          \`\`\`
+          
+          ---
+          
+          This PR was automatically created by the CLAP Orchestrator."
+          
+          echo "Would create PR in Miller9921/flutter-ui-components"
+          echo "Title: [UI] Add ${{ inputs.module_name }} widgets"
+          echo "Branch: feature/${{ inputs.module_name }}-ui"
+
+  # Job 4: Frontend Admin (depends on all previous layers)
+  create-frontend-admin-pr:
+    name: Create Frontend Admin PR
+    runs-on: ubuntu-latest
+    needs: [create-domain-pr, create-infrastructure-pr, create-ui-pr]
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+      
+      - name: Read copilot instructions
+        id: read-instructions
+        run: |
+          INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/04-frontend-admin.md)
+          echo "instructions<<EOF" >> $GITHUB_OUTPUT
+          echo "$INSTRUCTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create Frontend Admin PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MODULE_SPEC=$(cat ${{ inputs.module_path }}/module-spec.md)
+          COPILOT_INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/04-frontend-admin.md)
+          
+          PR_BODY="## Module: ${{ inputs.module_name }}
+          
+          ### Layer: Frontend Admin
+          
+          **Dependencies:** Domain, Infrastructure, and UI layers must be merged first
+          
+          ### Module Specification
+          
+          \`\`\`markdown
+          ${MODULE_SPEC}
+          \`\`\`
+          
+          ### Copilot Instructions
+          
+          \`\`\`markdown
+          ${COPILOT_INSTRUCTIONS}
+          \`\`\`
+          
+          ---
+          
+          This PR was automatically created by the CLAP Orchestrator."
+          
+          echo "Would create PR in Miller9921/flutter-admin-app"
+          echo "Title: [Admin] Add ${{ inputs.module_name }} module"
+          echo "Branch: feature/${{ inputs.module_name }}-admin"
+
+  # Job 5: Frontend User (depends on all previous layers)
+  create-frontend-user-pr:
+    name: Create Frontend User PR
+    runs-on: ubuntu-latest
+    needs: [create-domain-pr, create-infrastructure-pr, create-ui-pr]
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+      
+      - name: Read copilot instructions
+        id: read-instructions
+        run: |
+          INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/05-frontend-user.md)
+          echo "instructions<<EOF" >> $GITHUB_OUTPUT
+          echo "$INSTRUCTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create Frontend User PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          MODULE_SPEC=$(cat ${{ inputs.module_path }}/module-spec.md)
+          COPILOT_INSTRUCTIONS=$(cat ${{ inputs.module_path }}/.copilot-instructions/05-frontend-user.md)
+          
+          PR_BODY="## Module: ${{ inputs.module_name }}
+          
+          ### Layer: Frontend User
+          
+          **Dependencies:** Domain, Infrastructure, and UI layers must be merged first
+          
+          ### Module Specification
+          
+          \`\`\`markdown
+          ${MODULE_SPEC}
+          \`\`\`
+          
+          ### Copilot Instructions
+          
+          \`\`\`markdown
+          ${COPILOT_INSTRUCTIONS}
+          \`\`\`
+          
+          ---
+          
+          This PR was automatically created by the CLAP Orchestrator."
+          
+          echo "Would create PR in Miller9921/flutter-frontuser-app"
+          echo "Title: [User] Add ${{ inputs.module_name }} module"
+          echo "Branch: feature/${{ inputs.module_name }}-user"
+
+  # Job 6: Update status tracking
+  update-status:
+    name: Update Module Status
+    runs-on: ubuntu-latest
+    needs: [create-domain-pr, create-infrastructure-pr, create-ui-pr, create-frontend-admin-pr, create-frontend-user-pr]
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+      
+      - name: Update status file
+        run: |
+          echo "Updating status for module: ${{ inputs.module_name }}"
+          # Update the status.json file with PR links and status
+          # This would track the progress of each PR across repositories
