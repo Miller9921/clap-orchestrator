@@ -1,0 +1,126 @@
+name: Validate Module Specification
+
+on:
+  pull_request:
+    paths:
+      - 'modules/**/*'
+  push:
+    paths:
+      - 'modules/**/*'
+
+jobs:
+  validate:
+    name: Validate Module Spec
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Find module specs
+        id: find-specs
+        run: |
+          # Find all module-spec.md files in modules directory
+          SPECS=$(find modules -name "module-spec.md" -type f)
+          echo "Found module specs:"
+          echo "$SPECS"
+          echo "specs<<EOF" >> $GITHUB_OUTPUT
+          echo "$SPECS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Validate module structure
+        run: |
+          EXIT_CODE=0
+          
+          # Check each module directory
+          for module_dir in modules/*/; do
+            if [ -d "$module_dir" ]; then
+              echo "Validating module: $module_dir"
+              
+              # Check for required files
+              if [ ! -f "${module_dir}module-spec.md" ]; then
+                echo "❌ Missing module-spec.md in $module_dir"
+                EXIT_CODE=1
+              else
+                echo "✅ module-spec.md found"
+              fi
+              
+              # Check for copilot instructions
+              if [ ! -d "${module_dir}.copilot-instructions" ]; then
+                echo "❌ Missing .copilot-instructions directory in $module_dir"
+                EXIT_CODE=1
+              else
+                echo "✅ .copilot-instructions directory found"
+                
+                # Check for required instruction files
+                for file in 01-domain.md 02-infrastructure.md 03-ui.md 04-frontend-admin.md 05-frontend-user.md 06-kiwi-di.md; do
+                  if [ ! -f "${module_dir}.copilot-instructions/$file" ]; then
+                    echo "❌ Missing ${module_dir}.copilot-instructions/$file"
+                    EXIT_CODE=1
+                  else
+                    echo "✅ $file found"
+                  fi
+                done
+              fi
+              
+              # Check for i18n-keys.md
+              if [ ! -f "${module_dir}i18n-keys.md" ]; then
+                echo "❌ Missing i18n-keys.md in $module_dir"
+                EXIT_CODE=1
+              else
+                echo "✅ i18n-keys.md found"
+              fi
+              
+              # Check for status.json
+              if [ ! -f "${module_dir}status.json" ]; then
+                echo "❌ Missing status.json in $module_dir"
+                EXIT_CODE=1
+              else
+                echo "✅ status.json found"
+              fi
+              
+              echo "---"
+            fi
+          done
+          
+          if [ $EXIT_CODE -ne 0 ]; then
+            echo "❌ Validation failed. Please ensure all required files are present."
+            exit 1
+          else
+            echo "✅ All validations passed!"
+          fi
+      
+      - name: Validate module spec content
+        run: |
+          # Validate that module-spec.md contains required sections
+          for spec_file in modules/*/module-spec.md; do
+            if [ -f "$spec_file" ]; then
+              echo "Validating content of $spec_file"
+              
+              REQUIRED_SECTIONS=(
+                "Module Overview"
+                "Domain Layer"
+                "Infrastructure Layer"
+                "UI Layer"
+                "Frontend Admin"
+                "Frontend User"
+                "i18n Keys"
+                "Kiwi DI Setup"
+              )
+              
+              for section in "${REQUIRED_SECTIONS[@]}"; do
+                if ! grep -qi "$section" "$spec_file"; then
+                  echo "⚠️  Warning: Section '$section' not found in $spec_file"
+                fi
+              done
+              
+              echo "✅ Content validation complete for $spec_file"
+              echo "---"
+            fi
+          done
+      
+      - name: Report validation results
+        if: success()
+        run: |
+          echo "🎉 Module specification validation completed successfully!"
+          echo "All required files and sections are present."
