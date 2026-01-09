@@ -1,0 +1,66 @@
+{
+  "module_name": "[Module Name]",
+  "created_at": "[ISO 8601 Timestamp]",
+  "status": "in_progress",
+  "repositories": {
+    "domain": {
+      "repository": "Miller9921/flutter-domain",
+      "branch": "feature/[module-name]-domain",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null
+    },
+    "infrastructure": {
+      "repository": "Miller9921/flutter-infrastructure",
+      "branch": "feature/[module-name]-infrastructure",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null,
+      "depends_on": ["domain"]
+    },
+    "ui": {
+      "repository": "Miller9921/flutter-ui-components",
+      "branch": "feature/[module-name]-ui",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null,
+      "depends_on": ["domain", "infrastructure"]
+    },
+    "admin": {
+      "repository": "Miller9921/flutter-admin-app",
+      "branch": "feature/[module-name]-admin",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null,
+      "depends_on": ["domain", "infrastructure", "ui"]
+    },
+    "user": {
+      "repository": "Miller9921/flutter-frontuser-app",
+      "branch": "feature/[module-name]-user",
+      "pr_url": null,
+      "pr_number": null,
+      "status": "pending",
+      "merged_at": null,
+      "depends_on": ["domain", "infrastructure", "ui"]
+    }
+  },
+  "workflow_run": {
+    "workflow_id": null,
+    "run_id": null,
+    "run_url": null,
+    "triggered_at": null,
+    "completed_at": null
+  },
+  "merge_order": [
+    "domain",
+    "infrastructure",
+    "ui",
+    "admin",
+    "user"
+  ],
+  "notes": "Status values: pending, pr_created, in_review, approved, merged, failed"
+}
