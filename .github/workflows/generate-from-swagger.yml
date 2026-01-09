@@ -1,0 +1,1045 @@
+name: Generate from Swagger XML
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_name:
+        description: 'Module name (e.g., user-management)'
+        required: true
+        type: string
+      swagger_xml:
+        description: 'Swagger XML content (paste the entire XML)'
+        required: true
+        type: string
+
+jobs:
+  # Job 1: Save Swagger XML and Create Instructions
+  prepare-module:
+    name: Prepare Module Files
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Create module directory structure
+        run: |
+          MODULE_DIR="modules/${{ inputs.module_name }}-module"
+          
+          # Create directory structure
+          mkdir -p "${MODULE_DIR}/inputs"
+          mkdir -p "${MODULE_DIR}/.copilot-instructions"
+          
+          echo "Module directory created: ${MODULE_DIR}"
+      
+      - name: Save Swagger XML
+        run: |
+          MODULE_DIR="modules/${{ inputs.module_name }}-module"
+          
+          # Save swagger XML to file
+          cat > "${MODULE_DIR}/inputs/swagger.xml" << 'EOF'
+          ${{ inputs.swagger_xml }}
+          EOF
+          
+          echo "Swagger XML saved to ${MODULE_DIR}/inputs/swagger.xml"
+          echo "File size: $(wc -c < ${MODULE_DIR}/inputs/swagger.xml) bytes"
+      
+      - name: Create Domain Instructions
+        run: |
+          MODULE_DIR="modules/${{ inputs.module_name }}-module"
+          
+          cat > "${MODULE_DIR}/.copilot-instructions/01-domain.md" << 'EOF'
+          # Domain Layer Implementation Instructions - Generated from Swagger
+
+          ## Overview
+          Create Domain layer components by analyzing the Swagger XML specification and following clean architecture principles with Equatable models, service orchestration, and repository interfaces.
+
+          ## Repository
+          **Target:** Miller9921/flutter-domain
+
+          ## Input File
+          **Swagger XML Location:** `modules/${{ inputs.module_name }}-module/inputs/swagger.xml`
+
+          ## Step 1: Analyze Swagger XML
+
+          Parse the Swagger XML file to extract:
+          - **Schemas/Models**: Look for `<xs:complexType>` or similar schema definitions
+          - **Properties**: Extract field names, types, and whether they're required
+          - **Endpoints**: Identify REST endpoints and their operations (GET, POST, PUT, DELETE)
+          - **Relationships**: Note any references between models
+
+          ### Common Swagger XML Patterns
+
+          ```xml
+          <!-- Schema Definition -->
+          <xs:complexType name="User">
+            <xs:sequence>
+              <xs:element name="id" type="xs:string" />
+              <xs:element name="name" type="xs:string" />
+              <xs:element name="email" type="xs:string" />
+              <xs:element name="createdAt" type="xs:dateTime" />
+            </xs:sequence>
+          </xs:complexType>
+          ```
+
+          ### Type Mapping (XML Schema to Dart)
+
+          - `xs:string` → `String`
+          - `xs:int` / `xs:integer` → `int`
+          - `xs:double` / `xs:decimal` → `double`
+          - `xs:boolean` → `bool`
+          - `xs:dateTime` → `DateTime`
+          - `minOccurs="0"` → nullable field (`Type?`)
+          - Arrays → `List<Type>`
+
+          ## Step 2: Create Entities (Models)
+
+          For each schema in the Swagger XML, create a corresponding Dart model.
+
+          ### Requirements
+          - Extend Equatable
+          - Use const constructor
+          - All fields must be final
+          - Implement copyWith method
+          - Override props getter
+
+          ### Entity Template
+
+          ```dart
+          import 'package:equatable/equatable.dart';
+
+          class [EntityName]Model extends Equatable {
+            final String id;
+            final [Type] [propertyName];
+            // ... other properties extracted from Swagger
+            final DateTime createdAt;
+            final DateTime? updatedAt;
+
+            const [EntityName]Model({
+              required this.id,
+              required this.[propertyName],
+              // ... other properties
+              required this.createdAt,
+              this.updatedAt,
+            });
+
+            [EntityName]Model copyWith({
+              String? id,
+              [Type]? [propertyName],
+              // ... other properties
+              DateTime? createdAt,
+              DateTime? updatedAt,
+            }) {
+              return [EntityName]Model(
+                id: id ?? this.id,
+                [propertyName]: [propertyName] ?? this.[propertyName],
+                // ... other properties
+                createdAt: createdAt ?? this.createdAt,
+                updatedAt: updatedAt ?? this.updatedAt,
+              );
+            }
+
+            @override
+            List<Object?> get props => [
+                  id,
+                  [propertyName],
+                  // ... other properties
+                  createdAt,
+                  updatedAt,
+                ];
+          }
+          ```
+
+          ## Step 3: Create Repository Interfaces
+
+          Based on the Swagger endpoints, create repository interface methods.
+
+          ### Endpoint to Method Mapping
+
+          - `GET /api/[resource]` → `Future<List<[Entity]Model>> getAll[Entity]s()`
+          - `GET /api/[resource]/{id}` → `Future<[Entity]Model?> get[Entity]ById(String id)`
+          - `POST /api/[resource]` → `Future<[Entity]Model> create[Entity]([Entity]Model model)`
+          - `PUT /api/[resource]/{id}` → `Future<[Entity]Model> update[Entity]([Entity]Model model)`
+          - `DELETE /api/[resource]/{id}` → `Future<void> delete[Entity](String id)`
+
+          ### Requirements
+          - Abstract class (interface)
+          - All methods return Future<T>
+          - NO Either<L, R> types
+          - NO Failure classes
+          - Clear method names based on Swagger operations
+
+          ### Repository Interface Template
+
+          ```dart
+          import '../entities/[entity]_model.dart';
+
+          abstract class I[Entity]Repository {
+            // Methods based on Swagger endpoints
+            Future<List<[Entity]Model>> getAll[Entity]s();
+            
+            Future<[Entity]Model?> get[Entity]ById(String id);
+            
+            Future<[Entity]Model> create[Entity]([Entity]Model model);
+            
+            Future<[Entity]Model> update[Entity]([Entity]Model model);
+            
+            Future<void> delete[Entity](String id);
+            
+            // Add other methods based on Swagger endpoints
+          }
+          ```
+
+          ## Step 4: Create Services
+
+          Create service layer to orchestrate repository calls and apply business logic.
+
+          ### Requirements
+          - Orchestrate business logic
+          - Depend on repository interfaces (injected via constructor)
+          - Return Future<T> directly (NO Either, NO Failures)
+          - Use try/catch for error handling
+          - Keep business logic centralized
+
+          ### Service Template
+
+          ```dart
+          import '../entities/[entity]_model.dart';
+          import '../repositories/i_[entity]_repository.dart';
+
+          class [Entity]Service {
+            final I[Entity]Repository _[entity]Repository;
+
+            [Entity]Service(this._[entity]Repository);
+
+            Future<List<[Entity]Model>> getAll[Entity]s() async {
+              try {
+                return await _[entity]Repository.getAll[Entity]s();
+              } catch (e) {
+                rethrow;
+              }
+            }
+
+            Future<[Entity]Model?> get[Entity]ById(String id) async {
+              try {
+                return await _[entity]Repository.get[Entity]ById(id);
+              } catch (e) {
+                rethrow;
+              }
+            }
+
+            Future<[Entity]Model> create[Entity]([Entity]Model model) async {
+              try {
+                // Add business validation here
+                return await _[entity]Repository.create[Entity](model);
+              } catch (e) {
+                rethrow;
+              }
+            }
+
+            Future<[Entity]Model> update[Entity]([Entity]Model model) async {
+              try {
+                // Add business validation here
+                return await _[entity]Repository.update[Entity](model);
+              } catch (e) {
+                rethrow;
+              }
+            }
+
+            Future<void> delete[Entity](String id) async {
+              try {
+                await _[entity]Repository.delete[Entity](id);
+              } catch (e) {
+                rethrow;
+              }
+            }
+          }
+          ```
+
+          ## Step 5: Create Exports File
+
+          ### exports.dart
+
+          ```dart
+          // Entities
+          export 'entities/[entity]_model.dart';
+          // Add exports for all entities
+
+          // Services
+          export 'services/[entity]_service.dart';
+          // Add exports for all services
+
+          // Repositories
+          export 'repositories/i_[entity]_repository.dart';
+          // Add exports for all repository interfaces
+          ```
+
+          ## Structure
+          ```
+          /lib/
+            └── ${{ inputs.module_name }}module/
+                ├── entities/
+                │   ├── [entity1]_model.dart
+                │   └── [entity2]_model.dart
+                ├── services/
+                │   └── [entity]_service.dart
+                ├── repositories/
+                │   └── i_[entity]_repository.dart
+                └── exports.dart
+          ```
+
+          ## Important Rules
+
+          ### ✅ DO
+          - Analyze Swagger XML thoroughly before creating models
+          - Map XML schema types to appropriate Dart types
+          - Use Equatable for all models
+          - Use const constructors
+          - Implement copyWith for immutability
+          - Return Future<T> directly
+          - Keep business logic in services
+          - Create repository methods for each Swagger endpoint
+          - Use descriptive names based on Swagger operation IDs
+
+          ### ❌ DON'T
+          - DON'T use Either<Failure, T>
+          - DON'T create Failure classes
+          - DON'T use Value Objects
+          - DON'T put business logic in repositories
+          - DON'T make API calls directly
+          - DON'T use mutable fields (no late, no var)
+          - DON'T skip copyWith method
+          - DON'T ignore nullable fields from Swagger
+
+          ## Naming Conventions
+
+          - **Models:** `[Entity]Model` (e.g., UserModel, PaymentModel)
+          - **Services:** `[Entity]Service` (e.g., UserService, PaymentService)
+          - **Repositories:** `I[Entity]Repository` (e.g., IUserRepository, IPaymentRepository)
+          - **Files:** snake_case (e.g., user_model.dart, user_service.dart)
+          - **Directories:** lowercase (e.g., entities, services, repositories)
+
+          ## Dependencies
+
+          ```yaml
+          dependencies:
+            equatable: ^2.0.5
+          ```
+
+          ## Example Workflow
+
+          1. Open `modules/${{ inputs.module_name }}-module/inputs/swagger.xml`
+          2. Identify all schemas/models in the XML
+          3. For each schema:
+             - Create entity in `entities/` folder
+             - Create repository interface in `repositories/` folder
+             - Create service in `services/` folder
+          4. Create exports.dart file
+          5. Ensure all files follow CLAP domain patterns
+
+          ---
+
+          **Follow these patterns exactly for consistent Domain layer implementation across the CLAP architecture.**
+          EOF
+          
+          echo "Domain instructions created"
+      
+      - name: Create Infrastructure Instructions
+        run: |
+          MODULE_DIR="modules/${{ inputs.module_name }}-module"
+          
+          cat > "${MODULE_DIR}/.copilot-instructions/02-infrastructure.md" << 'EOF'
+          # Infrastructure Layer Implementation Instructions - Generated from Swagger
+
+          ## Overview
+          Create Infrastructure layer with DTOs, Adapters, API clients, and Repository implementations based on the Swagger XML specification.
+
+          ## Repository
+          **Target:** Miller9921/flutter-infrastructure
+
+          ## Input File
+          **Swagger XML Location:** `modules/${{ inputs.module_name }}-module/inputs/swagger.xml`
+
+          ## Step 1: Analyze Swagger XML
+
+          Parse the Swagger XML file to extract:
+          - **Schemas/Models**: Look for schema definitions to create DTOs
+          - **Field Mappings**: Note JSON field names (often snake_case in API)
+          - **Endpoints**: Extract base URLs, paths, and HTTP methods
+          - **Required/Optional**: Determine which fields are required
+
+          ### Type Mapping (XML Schema to Dart DTO)
+
+          - `xs:string` → `String?`
+          - `xs:int` / `xs:integer` → `int?`
+          - `xs:double` / `xs:decimal` → `double?`
+          - `xs:boolean` → `bool?`
+          - `xs:dateTime` → `String?` (ISO8601 format)
+          - Arrays → `List<Type>?`
+
+          **Note:** All DTO fields should be nullable
+
+          ## Step 2: Create DTOs
+
+          For each schema in the Swagger XML, create a corresponding DTO.
+
+          ### Requirements
+          - Use @JsonSerializable() annotation
+          - Include part directive for generated code
+          - All fields nullable (String?, int?, etc.)
+          - fromJson factory constructor
+          - toJson method
+          - Use @JsonKey for field name mapping
+
+          ### DTO Template
+
+          ```dart
+          import 'package:json_annotation/json_annotation.dart';
+
+          part '[entity]_dto.g.dart';
+
+          @JsonSerializable()
+          class [Entity]Dto {
+            final String? id;
+            final [Type]? [propertyName];
+            // Map snake_case API fields to camelCase
+            @JsonKey(name: 'created_at')
+            final String? createdAt;
+            @JsonKey(name: 'updated_at')
+            final String? updatedAt;
+            // Add other properties from Swagger
+
+            [Entity]Dto({
+              this.id,
+              this.[propertyName],
+              this.createdAt,
+              this.updatedAt,
+              // Other properties
+            });
+
+            factory [Entity]Dto.fromJson(Map<String, dynamic> json) =>
+                _$[Entity]DtoFromJson(json);
+
+            Map<String, dynamic> toJson() => _$[Entity]DtoToJson(this);
+          }
+          ```
+
+          ### Generate JSON Serialization Code
+
+          After creating DTOs, run:
+          ```bash
+          flutter pub run build_runner build --delete-conflicting-outputs
+          ```
+
+          ## Step 3: Create Adapters
+
+          Create adapters to convert between Domain models and DTOs.
+
+          ### Requirements
+          - Extend ModelAdapter<Model, Dto, void>
+          - Implement toModel (DTO → Model)
+          - Implement fromModel (Model → DTO)
+          - Handle nullable fields with defaults
+          - Convert date formats (String ↔ DateTime)
+
+          ### Adapter Template
+
+          ```dart
+          import 'package:domain_clap/${{ inputs.module_name }}module/exports.dart';
+          import 'package:infrastructure_clap/core/adapter/model_adapter.dart';
+
+          import '../dtos/[entity]_dto.dart';
+
+          class [Entity]Adapter extends ModelAdapter<[Entity]Model, [Entity]Dto, void> {
+            @override
+            [Entity]Model toModel([Entity]Dto dto) {
+              return [Entity]Model(
+                id: dto.id ?? '',
+                [propertyName]: dto.[propertyName] ?? [defaultValue],
+                createdAt: dto.createdAt != null
+                    ? DateTime.parse(dto.createdAt!)
+                    : DateTime.now(),
+                updatedAt: dto.updatedAt != null
+                    ? DateTime.parse(dto.updatedAt!)
+                    : null,
+                // Other properties with appropriate defaults
+              );
+            }
+
+            @override
+            [Entity]Dto fromModel([Entity]Model model) {
+              return [Entity]Dto(
+                id: model.id,
+                [propertyName]: model.[propertyName],
+                createdAt: model.createdAt.toIso8601String(),
+                updatedAt: model.updatedAt?.toIso8601String(),
+                // Other properties
+              );
+            }
+          }
+          ```
+
+          ## Step 4: Create API Clients
+
+          Create API clients based on Swagger endpoints.
+
+          ### Extract from Swagger
+          - Base URL
+          - Endpoint paths
+          - HTTP methods (GET, POST, PUT, DELETE)
+          - Query parameters
+          - Request/Response bodies
+
+          ### Requirements
+          - Inject HttpClientApi dependency
+          - Use Uri.https for URL construction
+          - Use HttpClientApi methods (getRequestWithToken, postRequestWithToken, etc.)
+          - Use ExceptionHandlerResponse for errors
+          - Define TYPE_RETURN_METHOD_* constants
+
+          ### API Template
+
+          ```dart
+          import 'package:infrastructure_clap/core/error/exception_handler_response.dart';
+          import 'package:infrastructure_clap/core/network/http_client_api.dart';
+
+          import '../dtos/[entity]_dto.dart';
+
+          class [Entity]Api {
+            final HttpClientApi _httpClient;
+
+            // Constants for return type methods
+            static const String TYPE_RETURN_METHOD_GET = 'get';
+            static const String TYPE_RETURN_METHOD_POST = 'post';
+            static const String TYPE_RETURN_METHOD_PUT = 'put';
+            static const String TYPE_RETURN_METHOD_DELETE = 'delete';
+
+            [Entity]Api(this._httpClient);
+
+            // Extract base URL and paths from Swagger
+            static const String _baseUrl = 'api.example.com'; // From Swagger
+            static const String _basePath = '/v1'; // From Swagger
+
+            Future<[Entity]Dto> get[Entity](String id) async {
+              try {
+                final uri = Uri.https(
+                  _baseUrl,
+                  '$_basePath/[resource]/$id', // Path from Swagger
+                );
+
+                final response = await _httpClient.getRequestWithToken(
+                  uri: uri,
+                  typeReturnMethod: TYPE_RETURN_METHOD_GET,
+                );
+
+                return [Entity]Dto.fromJson(response);
+              } catch (e) {
+                throw ExceptionHandlerResponse.responseDataSourceTemplError(
+                  e,
+                  TYPE_RETURN_METHOD_GET,
+                );
+              }
+            }
+
+            Future<List<[Entity]Dto>> getAll[Entity]s() async {
+              try {
+                final uri = Uri.https(
+                  _baseUrl,
+                  '$_basePath/[resource]', // Path from Swagger
+                );
+
+                final response = await _httpClient.getRequestWithToken(
+                  uri: uri,
+                  typeReturnMethod: TYPE_RETURN_METHOD_GET,
+                );
+
+                return (response as List)
+                    .map((json) => [Entity]Dto.fromJson(json))
+                    .toList();
+              } catch (e) {
+                throw ExceptionHandlerResponse.responseDataSourceTemplError(
+                  e,
+                  TYPE_RETURN_METHOD_GET,
+                );
+              }
+            }
+
+            Future<[Entity]Dto> create[Entity]([Entity]Dto dto) async {
+              try {
+                final uri = Uri.https(
+                  _baseUrl,
+                  '$_basePath/[resource]',
+                );
+
+                final response = await _httpClient.postRequestWithToken(
+                  uri: uri,
+                  body: dto.toJson(),
+                  typeReturnMethod: TYPE_RETURN_METHOD_POST,
+                );
+
+                return [Entity]Dto.fromJson(response);
+              } catch (e) {
+                throw ExceptionHandlerResponse.responseDataSourceTemplError(
+                  e,
+                  TYPE_RETURN_METHOD_POST,
+                );
+              }
+            }
+
+            Future<[Entity]Dto> update[Entity](String id, [Entity]Dto dto) async {
+              try {
+                final uri = Uri.https(
+                  _baseUrl,
+                  '$_basePath/[resource]/$id',
+                );
+
+                final response = await _httpClient.putRequestWithToken(
+                  uri: uri,
+                  body: dto.toJson(),
+                  typeReturnMethod: TYPE_RETURN_METHOD_PUT,
+                );
+
+                return [Entity]Dto.fromJson(response);
+              } catch (e) {
+                throw ExceptionHandlerResponse.responseDataSourceTemplError(
+                  e,
+                  TYPE_RETURN_METHOD_PUT,
+                );
+              }
+            }
+
+            Future<void> delete[Entity](String id) async {
+              try {
+                final uri = Uri.https(
+                  _baseUrl,
+                  '$_basePath/[resource]/$id',
+                );
+
+                await _httpClient.deleteRequestWithToken(
+                  uri: uri,
+                  typeReturnMethod: TYPE_RETURN_METHOD_DELETE,
+                );
+              } catch (e) {
+                throw ExceptionHandlerResponse.responseDataSourceTemplError(
+                  e,
+                  TYPE_RETURN_METHOD_DELETE,
+                );
+              }
+            }
+          }
+          ```
+
+          ## Step 5: Create Repository Implementations
+
+          Implement the domain repository interfaces.
+
+          ### Requirements
+          - Implement Domain repository interface
+          - Inject NetworkVerify, API, Adapter dependencies
+          - Check network connectivity before operations
+          - Use API for data operations
+          - Use Adapter for DTO ↔ Model conversion
+
+          ### Repository Implementation Template
+
+          ```dart
+          import 'package:domain_clap/${{ inputs.module_name }}module/exports.dart';
+          import 'package:infrastructure_clap/core/network/network_verify.dart';
+
+          import '../adapters/[entity]_adapter.dart';
+          import '../apis/[entity]_api.dart';
+
+          class [Entity]RepositoryImpl implements I[Entity]Repository {
+            final NetworkVerify _networkVerify;
+            final [Entity]Api _[entity]Api;
+            final [Entity]Adapter _[entity]Adapter;
+
+            [Entity]RepositoryImpl(
+              this._networkVerify,
+              this._[entity]Api,
+              this._[entity]Adapter,
+            );
+
+            @override
+            Future<List<[Entity]Model>> getAll[Entity]s() async {
+              await _networkVerify.verifyConnection();
+
+              final dtos = await _[entity]Api.getAll[Entity]s();
+              return dtos.map((dto) => _[entity]Adapter.toModel(dto)).toList();
+            }
+
+            @override
+            Future<[Entity]Model?> get[Entity]ById(String id) async {
+              try {
+                await _networkVerify.verifyConnection();
+
+                final dto = await _[entity]Api.get[Entity](id);
+                return _[entity]Adapter.toModel(dto);
+              } catch (e) {
+                // Return null if not found
+                return null;
+              }
+            }
+
+            @override
+            Future<[Entity]Model> create[Entity]([Entity]Model model) async {
+              await _networkVerify.verifyConnection();
+
+              final dto = _[entity]Adapter.fromModel(model);
+              final resultDto = await _[entity]Api.create[Entity](dto);
+              return _[entity]Adapter.toModel(resultDto);
+            }
+
+            @override
+            Future<[Entity]Model> update[Entity]([Entity]Model model) async {
+              await _networkVerify.verifyConnection();
+
+              final dto = _[entity]Adapter.fromModel(model);
+              final resultDto = await _[entity]Api.update[Entity](model.id, dto);
+              return _[entity]Adapter.toModel(resultDto);
+            }
+
+            @override
+            Future<void> delete[Entity](String id) async {
+              await _networkVerify.verifyConnection();
+
+              await _[entity]Api.delete[Entity](id);
+            }
+          }
+          ```
+
+          ## Step 6: Create Exports File
+
+          ### exports.dart
+
+          ```dart
+          // DTOs
+          export 'dtos/[entity]_dto.dart';
+          // Add exports for all DTOs
+
+          // Adapters
+          export 'adapters/[entity]_adapter.dart';
+          // Add exports for all adapters
+
+          // APIs
+          export 'apis/[entity]_api.dart';
+          // Add exports for all APIs
+
+          // Repositories
+          export 'repositories/[entity]_repository_impl.dart';
+          // Add exports for all repository implementations
+          ```
+
+          ## Structure
+          ```
+          /lib/
+            └── ${{ inputs.module_name }}/
+                ├── dtos/
+                │   ├── [entity]_dto.dart
+                │   └── [entity]_dto.g.dart (generated)
+                ├── adapters/
+                │   └── [entity]_adapter.dart
+                ├── apis/
+                │   └── [entity]_api.dart
+                ├── repositories/
+                │   └── [entity]_repository_impl.dart
+                └── exports.dart
+          ```
+
+          ## Important Rules
+
+          ### ✅ DO
+          - Analyze Swagger XML for API structure
+          - Use @JsonSerializable for all DTOs
+          - Make all DTO fields nullable
+          - Use @JsonKey for field name mappings
+          - Extend ModelAdapter for adapters
+          - Use HttpClientApi methods in APIs
+          - Extract base URLs and paths from Swagger
+          - Check network before repository operations
+          - Use ExceptionHandlerResponse for errors
+
+          ### ❌ DON'T
+          - DON'T make DTO fields non-nullable
+          - DON'T skip @JsonKey for snake_case fields
+          - DON'T put business logic in repositories
+          - DON'T skip network verification
+          - DON'T make direct HTTP calls (use HttpClientApi)
+          - DON'T hardcode URLs without checking Swagger
+
+          ## Naming Conventions
+
+          - **DTOs:** `[Entity]Dto` (e.g., UserDto, PaymentDto)
+          - **Adapters:** `[Entity]Adapter` (e.g., UserAdapter, PaymentAdapter)
+          - **APIs:** `[Entity]Api` (e.g., UserApi, PaymentApi)
+          - **Repositories:** `[Entity]RepositoryImpl` (e.g., UserRepositoryImpl)
+          - **Files:** snake_case (e.g., user_dto.dart, user_adapter.dart)
+
+          ## Dependencies
+
+          ```yaml
+          dependencies:
+            json_annotation: ^4.8.1
+            domain_clap:
+              path: ../flutter-domain
+            infrastructure_clap:
+              path: ../flutter-infrastructure-core
+
+          dev_dependencies:
+            build_runner: ^2.4.6
+            json_serializable: ^6.7.1
+          ```
+
+          ## Example Workflow
+
+          1. Open `modules/${{ inputs.module_name }}-module/inputs/swagger.xml`
+          2. Extract schemas, endpoints, and field mappings
+          3. For each schema:
+             - Create DTO in `dtos/` folder
+             - Create Adapter in `adapters/` folder
+             - Create API client in `apis/` folder
+             - Create Repository implementation in `repositories/` folder
+          4. Run build_runner to generate JSON serialization code
+          5. Create exports.dart file
+          6. Ensure all files follow CLAP infrastructure patterns
+
+          ---
+
+          **Follow these patterns exactly for consistent Infrastructure layer implementation across the CLAP architecture.**
+          EOF
+          
+          echo "Infrastructure instructions created"
+      
+      - name: Commit and push changes
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "actions@github.com"
+          git add .
+          git commit -m "Add Swagger inputs and instructions for ${{ inputs.module_name }}"
+          git push
+
+  # Job 2: Create Domain PR
+  create-domain-pr:
+    name: Create Domain PR
+    runs-on: ubuntu-latest
+    needs: [prepare-module]
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      
+      - name: Pull latest changes
+        run: |
+          git pull origin ${{ github.ref }}
+      
+      - name: Read instructions
+        id: read-instructions
+        run: |
+          MODULE_DIR="modules/${{ inputs.module_name }}-module"
+          
+          if [ ! -f "${MODULE_DIR}/.copilot-instructions/01-domain.md" ]; then
+            echo "Error: Domain instructions file not found"
+            exit 1
+          fi
+          
+          INSTRUCTIONS=$(cat ${MODULE_DIR}/.copilot-instructions/01-domain.md)
+          echo "instructions<<EOF" >> $GITHUB_OUTPUT
+          echo "$INSTRUCTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Read Swagger XML
+        id: read-swagger
+        run: |
+          MODULE_DIR="modules/${{ inputs.module_name }}-module"
+          
+          if [ ! -f "${MODULE_DIR}/inputs/swagger.xml" ]; then
+            echo "Error: Swagger XML file not found"
+            exit 1
+          fi
+          
+          SWAGGER_CONTENT=$(cat ${MODULE_DIR}/inputs/swagger.xml)
+          echo "swagger<<EOF" >> $GITHUB_OUTPUT
+          echo "$SWAGGER_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create Domain PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COPILOT_INSTRUCTIONS=$(cat modules/${{ inputs.module_name }}-module/.copilot-instructions/01-domain.md)
+          SWAGGER_XML=$(cat modules/${{ inputs.module_name }}-module/inputs/swagger.xml)
+          
+          # Create PR body with instructions and Swagger XML
+          PR_BODY="## Module: ${{ inputs.module_name }}
+          
+          ### Layer: Domain
+          
+          ### Swagger XML Specification
+          
+          \`\`\`xml
+          ${SWAGGER_XML}
+          \`\`\`
+          
+          ### Implementation Instructions
+          
+          ${COPILOT_INSTRUCTIONS}
+          
+          ---
+          
+          **Instructions:**
+          1. Analyze the Swagger XML above to extract schemas and endpoints
+          2. Create Equatable models for each schema
+          3. Create repository interfaces for each resource
+          4. Create services to orchestrate business logic
+          5. Follow the CLAP domain patterns exactly
+          
+          This PR was automatically created by the CLAP Orchestrator from Swagger XML."
+          
+          echo "Domain PR would be created in Miller9921/flutter-domain"
+          echo "Title: [Domain] Add ${{ inputs.module_name }} module from Swagger"
+          echo "Branch: feature/${{ inputs.module_name }}-domain"
+          echo ""
+          echo "To actually create the PR, uncomment the gh CLI command and ensure proper authentication."
+          
+          # Uncomment to actually create PR:
+          # gh pr create --repo Miller9921/flutter-domain \
+          #   --title "[Domain] Add ${{ inputs.module_name }} module from Swagger" \
+          #   --body "$PR_BODY" \
+          #   --base main \
+          #   --head "feature/${{ inputs.module_name }}-domain"
+
+  # Job 3: Create Infrastructure PR (depends on Domain)
+  create-infrastructure-pr:
+    name: Create Infrastructure PR
+    runs-on: ubuntu-latest
+    needs: [create-domain-pr]
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout orchestrator
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+      
+      - name: Pull latest changes
+        run: |
+          git pull origin ${{ github.ref }}
+      
+      - name: Read instructions
+        id: read-instructions
+        run: |
+          MODULE_DIR="modules/${{ inputs.module_name }}-module"
+          
+          if [ ! -f "${MODULE_DIR}/.copilot-instructions/02-infrastructure.md" ]; then
+            echo "Error: Infrastructure instructions file not found"
+            exit 1
+          fi
+          
+          INSTRUCTIONS=$(cat ${MODULE_DIR}/.copilot-instructions/02-infrastructure.md)
+          echo "instructions<<EOF" >> $GITHUB_OUTPUT
+          echo "$INSTRUCTIONS" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Read Swagger XML
+        id: read-swagger
+        run: |
+          MODULE_DIR="modules/${{ inputs.module_name }}-module"
+          
+          if [ ! -f "${MODULE_DIR}/inputs/swagger.xml" ]; then
+            echo "Error: Swagger XML file not found"
+            exit 1
+          fi
+          
+          SWAGGER_CONTENT=$(cat ${MODULE_DIR}/inputs/swagger.xml)
+          echo "swagger<<EOF" >> $GITHUB_OUTPUT
+          echo "$SWAGGER_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Create Infrastructure PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          COPILOT_INSTRUCTIONS=$(cat modules/${{ inputs.module_name }}-module/.copilot-instructions/02-infrastructure.md)
+          SWAGGER_XML=$(cat modules/${{ inputs.module_name }}-module/inputs/swagger.xml)
+          
+          # Create PR body with instructions and Swagger XML
+          PR_BODY="## Module: ${{ inputs.module_name }}
+          
+          ### Layer: Infrastructure
+          
+          **Dependencies:** Domain layer must be reviewed/merged first
+          
+          ### Swagger XML Specification
+          
+          \`\`\`xml
+          ${SWAGGER_XML}
+          \`\`\`
+          
+          ### Implementation Instructions
+          
+          ${COPILOT_INSTRUCTIONS}
+          
+          ---
+          
+          **Instructions:**
+          1. Analyze the Swagger XML above to extract API structure
+          2. Create DTOs with @JsonSerializable for each schema
+          3. Create ModelAdapters for DTO ↔ Model conversion
+          4. Create API clients based on Swagger endpoints
+          5. Implement repository interfaces from Domain layer
+          6. Follow the CLAP infrastructure patterns exactly
+          
+          This PR was automatically created by the CLAP Orchestrator from Swagger XML."
+          
+          echo "Infrastructure PR would be created in Miller9921/flutter-infrastructure"
+          echo "Title: [Infrastructure] Add ${{ inputs.module_name }} module from Swagger"
+          echo "Branch: feature/${{ inputs.module_name }}-infrastructure"
+          echo ""
+          echo "To actually create the PR, uncomment the gh CLI command and ensure proper authentication."
+          
+          # Uncomment to actually create PR:
+          # gh pr create --repo Miller9921/flutter-infrastructure \
+          #   --title "[Infrastructure] Add ${{ inputs.module_name }} module from Swagger" \
+          #   --body "$PR_BODY" \
+          #   --base main \
+          #   --head "feature/${{ inputs.module_name }}-infrastructure"
+
+  # Job 4: Summary
+  workflow-summary:
+    name: Workflow Summary
+    runs-on: ubuntu-latest
+    needs: [prepare-module, create-domain-pr, create-infrastructure-pr]
+    permissions:
+      contents: read
+    steps:
+      - name: Print Summary
+        run: |
+          echo "========================================="
+          echo "Swagger to CLAP Workflow Completed"
+          echo "========================================="
+          echo ""
+          echo "Module: ${{ inputs.module_name }}"
+          echo ""
+          echo "Files Created:"
+          echo "- modules/${{ inputs.module_name }}-module/inputs/swagger.xml"
+          echo "- modules/${{ inputs.module_name }}-module/.copilot-instructions/01-domain.md"
+          echo "- modules/${{ inputs.module_name }}-module/.copilot-instructions/02-infrastructure.md"
+          echo ""
+          echo "PRs Created:"
+          echo "1. Domain PR in Miller9921/flutter-domain"
+          echo "2. Infrastructure PR in Miller9921/flutter-infrastructure"
+          echo ""
+          echo "Next Steps:"
+          echo "1. Review Domain PR and merge after implementation"
+          echo "2. Review Infrastructure PR (depends on Domain)"
+          echo "3. Consider creating UI/Frontend PRs manually if needed"
+          echo ""
+          echo "========================================="
